@@ -25,7 +25,7 @@ settings.PROJECT_NAME = argv["project-name"]
 var getPlatforms = function() {
   var deferred = Q.defer()
   var platforms = []
-  var xcodeFolder = "/Images.xcassets/AppIcon.appiconset/"
+  var xcodeFolder = "/Images.xcassets/AppIcon.appiconset"
 
   if (settings.OLD_XCODE_PATH) {
     xcodeFolder = "/Resources/icons/"
@@ -68,6 +68,19 @@ var getPlatforms = function() {
       { name: "AppIcon86x86@2x.png", size: 172 },
       { name: "AppIcon98x98@2x.png", size: 196 },
     ],
+    postBuild: platform => {
+      const contentsOutput = path.join(platform.iconsPath, "Contents.json")
+
+      if (!fs.existsSync(contentsOutput)) {
+        console.log(
+          `Copying ${path.join(
+            __dirname,
+            "Contents.json"
+          )} to ${contentsOutput}`
+        )
+        fs.copyFileSync(path.join(__dirname, "Contents.json"), contentsOutput)
+      }
+    },
   })
   platforms.push({
     name: "android",
@@ -197,7 +210,7 @@ var generateIcon = function(platform, icon) {
   if (fs.existsSync(platformPath)) {
     srcPath = platformPath
   }
-  var dstPath = platform.iconsPath + icon.name
+  var dstPath = path.join(platform.iconsPath, icon.name)
   var dst = path.dirname(dstPath)
   if (!fs.existsSync(dst)) {
     fs.mkdirsSync(dst)
@@ -256,7 +269,12 @@ var generateIconsForPlatform = function(platform) {
   icons.forEach(function(icon) {
     all.push(generateIcon(platform, icon))
   })
-  return Promise.all(all)
+  return Promise.all(all).then(() => {
+    if (platform.postBuild) {
+      console.log("Calling post build")
+      platform.postBuild(platform)
+    }
+  })
 }
 
 /**
